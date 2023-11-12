@@ -1,0 +1,115 @@
+version: "3"
+services:
+  availnode:
+    image: vbhattac/avail-node:test
+    command: --dev --rpc-methods=unsafe --unsafe-rpc-external --rpc-cors=all
+    ports:
+      - "30333:30333"
+      - "9944:9944"
+      - "9933:9933"
+    networks:
+      net:
+        ipv4_address: 172.16.3.1
+
+  bootstrap-client:
+    image: vbhattac/avail-light-bootstrap
+    ports:
+      - "39000:39000"
+      - "7700:7700"
+      - "39000:39000/udp"
+    networks:
+      net:
+        ipv4_address: 172.16.3.2
+    depends_on:
+      - availnode
+
+  avail-light-1:
+    image: vbhattac/avail-light:test
+    environment:
+      - LC_LOG_LEVEL=INFO
+      - LC_HTTP_SERVER_HOST=172.16.3.3
+      - LC_HTTP_SERVER_PORT=7000
+      - LC_SECRET_KEY_SEED=0
+      - LC_LIBP2P_SEED=1
+      - LC_LIBP2P_PORT=37000
+      - LC_FULL_NODE_RPC=http://172.16.3.1:9933
+      - LC_FULL_NODE_WS=ws://172.16.3.1:9944
+      - LC_APP_ID=1
+      - LC_CONFIDENCE=92.0
+      - LC_AVAIL_PATH=/da/state
+      - LC_PROMETHEUS_PORT=9520
+      - LC_BOOTSTRAPS=/ip4/172.16.3.2/udp/39000/quic-v1/p2p/12D3KooWStAKPADXqJ7cngPYXd2mSANpdgh1xQ34aouufHA2xShz
+      - LC_RELAYS=/ip4/127.0.0.1/udp/3700/quic-v1/p2p/12D3KooWEvGNWAqWNBo5VbUZUxt5TnYDeWhoRZKf82VfBZoU1BQM
+    ports:
+      - "37000:37000"
+      - "9520:9520"
+      - "37000:37000/udp"
+      - "7000:7000"
+    networks:
+      net:
+        ipv4_address: 172.16.3.3
+    restart: on-failure
+
+  avail-light-2:
+    image: vbhattac/avail-light:test
+    environment:
+      - LC_LOG_LEVEL=INFO
+      - LC_HTTP_SERVER_HOST=172.16.3.4
+      - LC_HTTP_SERVER_PORT=7000
+      - LC_SECRET_KEY_SEED=2
+      - LC_LIBP2P_SEED=1
+      - LC_LIBP2P_PORT=37000
+      - LC_FULL_NODE_RPC=http://172.16.3.1:9933
+      - LC_FULL_NODE_WS=ws://172.16.3.1:9944
+      - LC_APP_ID=1
+      - LC_CONFIDENCE=92.0
+      - LC_AVAIL_PATH=/da/state
+      - LC_PROMETHEUS_PORT=9520
+      - LC_BOOTSTRAPS=/ip4/172.16.3.2/udp/39000/quic-v1/p2p/12D3KooWStAKPADXqJ7cngPYXd2mSANpdgh1xQ34aouufHA2xShz
+      - LC_RELAYS=/ip4/127.0.0.1/udp/3700/quic-v1/p2p/12D3KooWEvGNWAqWNBo5VbUZUxt5TnYDeWhoRZKf82VfBZoU1BQM
+    ports:
+      - "37001:37000"
+      - "9521:9520"
+      - "7001:7000"
+    networks:
+      net:
+        ipv4_address: 172.16.3.4
+    restart: on-failure
+
+  libp2p-testing-tool:
+    image: vbhattac/libp2p-test-tool:latest
+    command: generate-network-report
+    container_name: libp2p-test-tool
+    networks:
+      net:
+        ipv4_address: 172.16.3.6
+    volumes:
+      - .${VOLUME_PATH}:/home
+    ports:
+      - "7071:7071"
+    restart: on-failure
+
+networks:
+  net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.3.0/24
+          gateway: 172.16.3.254
+## NOTE: relay config.yml
+# Set the Log Level
+# log_level = "info"
+# # If set to true, logs are displayed in JSON format, which is used for structured logging. Otherwise, plain text format is used (default: false).
+# log_format_json = false
+# # Secret key used to generate keypair. Can be either set to `seed` or to `key`.
+# # If set to seed, keypair will be generated from that seed.
+# # If set to key, a valid ed25519 private key must be provided, else the client will fail
+# # If `secret_key` is not set, random seed will be used.
+# secret_key = { seed="12" }
+# # P2P service port (default: 37000).
+# p2p_port = 3700
+# # Sets application-specific version of the protocol family used by the peer. (default: "/avail_kad/id/1.0.0")
+# identify_protocol = "/avail_kad/id/1.0.0"
+# # Sets agent version that is sent to peers. (default: "avail-light-client/rust-client")
+# identify_agent = "avail-light-client/rust-client"

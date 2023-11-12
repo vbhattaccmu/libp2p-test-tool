@@ -1,0 +1,98 @@
+version: "3"
+services:
+  availnode:
+    image: vbhattac/avail-node:test
+    container_name: availnode
+    command: --dev --rpc-methods=unsafe --unsafe-rpc-external --rpc-cors=all
+    ports:
+      - "30333:30333"
+      - "9944:9944"
+      - "9933:9933"
+    networks:
+      net:
+        ipv4_address: 172.16.3.1
+
+  bootstrap-client:
+    image: vbhattac/avail-light-bootstrap
+    container_name: bootstrap-client
+    ports:
+      - "39000:39000"
+      - "7700:7700"
+      - "39000:39000/udp"
+    networks:
+      net:
+        ipv4_address: 172.16.3.2
+    depends_on:
+      - availnode
+
+  avail-light-1:
+    image: vbhattac/avail-light:latest
+    container_name: avail-light-1
+    environment:
+      - LC_LOG_LEVEL=INFO
+      - LC_HTTP_SERVER_HOST=172.16.3.3
+      - LC_HTTP_SERVER_PORT=7000
+      - LC_SECRET_KEY_SEED=0
+      - LC_LIBP2P_SEED=1
+      - LC_LIBP2P_PORT=37000
+      - LC_FULL_NODE_RPC=http://172.16.3.1:9933
+      - LC_FULL_NODE_WS=ws://172.16.3.1:9944
+      - LC_APP_ID=1
+      - LC_CONFIDENCE=92.0
+      - LC_AVAIL_PATH=/da/state
+      - LC_PROMETHEUS_PORT=9520
+      - LC_BOOTSTRAPS=/ip4/172.16.3.2/udp/39000/quic-v1/p2p/12D3KooWStAKPADXqJ7cngPYXd2mSANpdgh1xQ34aouufHA2xShz
+    ports:
+      - "9520:9520"
+      - "7000:7000"
+    networks:
+      net:
+        ipv4_address: 172.16.3.3
+    restart: on-failure
+
+  avail-light-2:
+    image: vbhattac/avail-light:latest
+    container_name: avail-light-2
+    environment:
+      - LC_LOG_LEVEL=INFO
+      - LC_HTTP_SERVER_HOST=172.16.3.4
+      - LC_HTTP_SERVER_PORT=7000
+      - LC_SECRET_KEY_SEED=2
+      - LC_LIBP2P_SEED=1
+      - LC_LIBP2P_PORT=37000
+      - LC_FULL_NODE_RPC=http://172.16.3.1:9933
+      - LC_FULL_NODE_WS=ws://172.16.3.1:9944
+      - LC_APP_ID=1
+      - LC_CONFIDENCE=92.0
+      - LC_AVAIL_PATH=/da/state
+      - LC_PROMETHEUS_PORT=9520
+      - LC_BOOTSTRAPS=/ip4/172.16.3.2/udp/39000/quic-v1/p2p/12D3KooWStAKPADXqJ7cngPYXd2mSANpdgh1xQ34aouufHA2xShz
+    ports:
+      - "37001:37000"
+      - "9521:9520"
+      - "7001:7000"
+      - "37001:37000/udp"
+    networks:
+      net:
+        ipv4_address: 172.16.3.4
+    restart: on-failure
+
+  libp2p-testing-tool:
+    image: vbhattac/libp2p-test-tool:latest
+    container_name: libp2p-testing-tool
+    command: generate-network-report
+    networks:
+      net:
+        ipv4_address: 172.16.3.6
+    volumes:
+      - .${VOLUME_PATH}:/home
+    restart: on-failure
+
+networks:
+  net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.3.0/24
+          gateway: 172.16.3.254
