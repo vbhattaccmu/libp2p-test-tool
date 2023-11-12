@@ -1,0 +1,32 @@
+[package]
+name = "libp2p-test-tool"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.release]
+release = false
+
+[lib]
+name = "libp2p_test_tool"
+path = "src/lib.rs"
+
+[[bin]]
+name = "libp2p_test_tool"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.41"
+chrono = "0.4"
+clap = { version = "4.4.7", features = ["derive"] }
+csv = "1.1.5"
+env_logger = "0.10.0"
+futures = "0.3.29"
+futures-timer = "3.0"
+libp2p = { version = "0.52.3", features = [ "autonat", "mdns", "dns", "relay", "kad", "identify", "macros", "noise", "quic", "tcp", "rsa", "tokio", "yamux"] }
+log = "0.4"
+tokio = { version = "1.29", features = ["macros", "net", "rt", "signal"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints]
+workspace = true
