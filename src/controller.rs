@@ -112,6 +112,18 @@ impl Controller {
                         SwarmEvent::Behaviour(PeerNetworkEvent::Identify(event)) => match event {
                             IdentifyEvent::Received { peer_id, info } => {
                                 info!("[Identify]: Received identify: Peer ID: {} Listen addrs: {:?} {:?}", peer_id, info.listen_addrs, info.observed_addr);
+                                info.listen_addrs
+                                    .into_iter()
+                                    .filter(|multi_addr| multi_addr.to_string().contains(Protocol::P2p(peer_id).tag()))
+                                    .for_each(|multi_addr| {
+                                        info!("[Task 2]: Log newly connected peers.");
+                                        self.writer.newly_connected_peer_cache.write().unwrap().entry(peer_id.to_string())
+                                            .or_insert((ip, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis().to_string()));
+                                        // Add the peer to DHT
+                                        self.swarm.behaviour_mut().add_address(&peer_id, multi_addr);
+                                        // Ask peer to discover more peers
+                                        self.swarm.behaviour_mut().get_closest_peers(peer_id);
+                                    });
                             }
                             IdentifyEvent::Sent { peer_id } => {
                                 info!("[Identify]: Sent peer_id for identify {:?}", peer_id);
