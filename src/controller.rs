@@ -86,9 +86,104 @@ impl Controller {
         }
 
         // Start event loop.
-        // let _ = self.start_event_loop().await;
+        let _ = self.start_event_loop().await;
 
         Ok(self)
+    }
+
+    /// The main event handler for swarm. Works on Identify, Kad and MDNS
+    /// 1. Identify: In this context, identifies peers with whom connection has been established.
+    ///              Also asks the peer node to discover closest peers on DHT.
+    /// 2. Kademlia: In this context, the peer discovery protocol where a dialled peer searches
+    ///              for peers closest to it when the `get_closest_peer` query is triggered.
+    /// 3. Mdns: In this context, mdns facililates/speeds up discovery of initial set of
+    ///          nodes in the local network even before `kad` protocol is triggered.
+    ///          The mdns protocol allows the tool to start interacting with the network with little to no
+    ///          prerequisite information of bootstrapped peers.
+    async fn start_event_loop(&mut self) -> Result<(), CLIError> {
+        let current_instant = Instant::now();
+        let mut bootstrap_interval =
+            time::interval(Duration::from_secs(self.config.bootstrap_period));
+
+        loop {
+            tokio::select! {
+                event = self.swarm.next() => {
+                    match event.expect("Stream should be infinite.") {
+                        SwarmEvent::Behaviour(PeerNetworkEvent::Identify(event)) => match event {
+                            IdentifyEvent::Received { peer_id, info } => {
+                                info!("[Identify]: Received identify: Peer ID: {} Listen addrs: {:?} {:?}", peer_id, info.listen_addrs, info.observed_addr);
+                            }
+                            IdentifyEvent::Sent { peer_id } => {
+                                info!("[Identify]: Sent peer_id for identify {:?}", peer_id);
+                            }
+                            IdentifyEvent::Error { peer_id, error } => {
+                                info!("[Identify]: Error peer_id {:?} error {:?}", peer_id, error);
+                            }
+                            _ => {}
+                        }
+                        SwarmEvent::Behaviour(PeerNetworkEvent::Mdns(event)) => match event {
+                            MdnsEvent::Discovered(addrs_list) => {
+                                info!("[Mdns]: Discovered peer: {:?}", addrs_list);
+                                addrs_list
+                                    .into_iter()
+                                    .filter(|a| a.1.to_string().contains(Protocol::P2p(a.0).tag()))
+                                    .for_each(|a| {
+                                        info!(
+                                            "[Mdns]: Discovered Peer: {} {}",
+                                            a.0.to_string(),
+                                            a.1.to_string()
+                                        );
+                                        // Peers discovered! Time to dial them
+                                        let _ = self.swarm.dial(a.1.clone());
+                                    });
+                            }
+                            MdnsEvent::Expired(addrs_list) => {
+                                info!("[Mdns]: Expired list {:?}", addrs_list);
+                            }
+                        }
+                        SwarmEvent::Behaviour(PeerNetworkEvent::Kad(event)) => match event {
+                            KademliaEvent::OutboundQueryProgressed {
+                                result: kad::QueryResult::GetClosestPeers(Ok(ok)),
+                                ..
+                            } => {
+                                if ok.peers.is_empty() {
+                                    info!("[Kad]: Query finished with no closest peers.")
+                                } else {
+                                    info!("[Kad]: Query finished with closest peers: {:#?}", ok.peers);
+                                }
+                                for peer in ok.peers {
+                                    // Peers discovered! Time to dial them
+                                    let _ = self.swarm.dial(peer);
+                                }
+                            }
+                            KademliaEvent::OutboundQueryProgressed {
+                                result:
+                                    kad::QueryResult::GetClosestPeers(Err(kad::GetClosestPeersError::Timeout {
+                                        ..
+                                    })),
+                                ..
+                            } => {
+                                info!("[Kad]: Query for closest peers timed out")
+                            }
+                            _ => {}
+                        }
+                        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                            info!("[Swarm]: Connection Established {}", peer_id);
+                        }
+                        SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                            info!("[Swarm]: Connection Closed  {}", peer_id);
+                        }
+                        SwarmEvent::IncomingConnection { local_addr, .. } => {
+                            info!("[Swarm]: IncomingConnection {}", local_addr);
+                        }
+                        e => info!("[Swarm]: Event {:?}", e),
+                    }
+                }
+                _ = bootstrap_interval.tick() => self.swarm.behaviour_mut().bootstrap(),
+            }
+        }
+
+        Ok(())
     }
 
     /// The transport layer builder for swarm. Currently supports only tcp and quic.
