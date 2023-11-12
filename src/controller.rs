@@ -176,6 +176,22 @@ impl Controller {
                         SwarmEvent::IncomingConnection { local_addr, .. } => {
                             info!("[Swarm]: IncomingConnection {}", local_addr);
                         }
+                        SwarmEvent::OutgoingConnectionError { peer_id, error, ..} => {
+                            info!("[Swarm]: OutgoingConnectionError {:?}, {:?}", peer_id, error);
+                            match error {
+                                DialError::Transport(addrs) => {
+                                    for addr in addrs.iter() {
+                                        info!("[Task 1]: Log MultiAddress if not reachable {}.", addr.0);
+                                        self.writer.unreachable_peer_cache.write().unwrap().entry(addr.0.to_string())
+                                            .or_insert((
+                                                Status::Unreachable.to_string(),
+                                                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis().to_string()
+                                            ));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                         e => info!("[Swarm]: Event {:?}", e),
                     }
                 }
