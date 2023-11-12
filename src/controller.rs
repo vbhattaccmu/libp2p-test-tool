@@ -90,4 +90,32 @@ impl Controller {
 
         Ok(self)
     }
+
+    /// The transport layer builder for swarm. Currently supports only tcp and quic.
+    fn build_transport_layer(config: &Config) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
+        let tcp_transport = libp2p::tcp::tokio::Transport::new(TcpConfig::new().nodelay(true))
+            .upgrade(upgrade::Version::V1Lazy)
+            .authenticate(
+                noise::Config::new(&config.keypair).expect("signing libp2p-noise static keypair"),
+            )
+            .multiplex(yamux::Config::default())
+            .timeout(std::time::Duration::from_secs(config.timeout))
+            .boxed();
+
+        let quic_transport = quic::tokio::Transport::new(quic::Config::new(&config.keypair));
+
+        info!("[Task 3]: Create Dns config to Resolve IP.");
+        let transport = TokioDnsConfig::system(libp2p::core::transport::OrTransport::new(
+            quic_transport,
+            tcp_transport,
+        ))
+        .unwrap()
+        .map(|either_output, _| match either_output {
+            Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+        })
+        .boxed();
+
+        Ok(transport)
+    }
 }
