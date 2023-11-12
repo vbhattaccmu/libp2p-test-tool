@@ -116,9 +116,14 @@ impl Controller {
                                     .into_iter()
                                     .filter(|multi_addr| multi_addr.to_string().contains(Protocol::P2p(peer_id).tag()))
                                     .for_each(|multi_addr| {
-                                        info!("[Task 2]: Log newly connected peers.");
-                                        self.writer.newly_connected_peer_cache.write().unwrap().entry(peer_id.to_string())
-                                            .or_insert((ip, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis().to_string()));
+                                        info!("[Task 3]: Resolve IP for newly connected peers.");
+                                        if let Ok(ip) = Self::get_peer_ip(&info.observed_addr) {
+                                            info!("[Task 2]: Log newly connected peers.");
+                                            self.writer.newly_connected_peer_cache.write().unwrap().entry(peer_id.to_string())
+                                                .or_insert((ip, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis().to_string()));
+                                        } else {
+                                            error!("[Swarm]: Failed to resolve peer IP.")
+                                        }
                                         // Add the peer to DHT
                                         self.swarm.behaviour_mut().add_address(&peer_id, multi_addr);
                                         // Ask peer to discover more peers
@@ -240,5 +245,21 @@ impl Controller {
         .boxed();
 
         Ok(transport)
+    }
+
+    /// A utility helper to resolve Peer IP address via `multiaddr::Protocol`
+    fn get_peer_ip(multi_addr: &Multiaddr) -> Result<String, CLIError> {
+        if let Some(protocol) = multi_addr.into_iter().next() {
+            match protocol {
+                Protocol::Ip4(ip) => return Ok(ip.to_string()),
+                Protocol::Ip6(ip) => return Ok(ip.to_string()),
+                Protocol::Dns(addr) => return Ok(addr.to_string()),
+                _ => {
+                    return Err(CLIError::IPResolutionError);
+                }
+            }
+        }
+
+        Err(CLIError::IPResolutionError)
     }
 }
