@@ -112,7 +112,7 @@ async fn test_new_peer_join_and_ip_resolution() {
     ))
     .unwrap();
 
-    // unreachable peer count should be 1 (only headers) since everyone
+    // unreachable peer count should be 0 (only headers) since everyone
     // is dialable in the network
     assert_eq!(
         Reader::from_reader(unreachable).records().count() == 0,
