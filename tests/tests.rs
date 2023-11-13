@@ -27,9 +27,8 @@ async fn test_unreachable_peer_log() {
         .disconnect("avail-light-1", NETWORK_NAME)
         .expect("Container disconnect failed");
 
-    if !compose.has_tool_exited(Duration::from_secs(TIMEOUT)) {
-        panic!("Network resources busy. Tool timed out.");
-    }
+    // Let the tool operate throughout its whole duration
+    sleep(Duration::from_secs(OPERATION_DURATION)).await;
 
     compose.clean_up().expect("Failed to clean up services");
 
@@ -73,9 +72,8 @@ async fn test_new_peer_join_and_ip_resolution() {
         .add_external_light_client("avail-light-3")
         .expect("could not add external peer image to existing network.");
 
-    if !compose.has_tool_exited(Duration::from_secs(TIMEOUT)) {
-        panic!("Network resources busy. tool timed out.");
-    }
+    // Let the tool operate throughout its whole duration
+    sleep(Duration::from_secs(OPERATION_DURATION)).await;
 
     compose
         .delete("avail-light-3")
@@ -193,25 +191,6 @@ impl DockerCompose {
         }
     }
 
-    // Check if tool has exited
-    fn has_tool_exited(&self, timeout: Duration) -> bool {
-        let start_time = Instant::now();
-        loop {
-            let status = Self::run_command(
-                "docker",
-                &["inspect", "-f", "{{.State.Status}", "avail-light-1"],
-            )
-            .unwrap();
-
-            if status != "running" {
-                return true;
-            }
-            if start_time.elapsed() > timeout {
-                return false;
-            }
-        }
-    }
-
     // Set up compose
     fn up(&self) -> Result<String, String> {
         Self::run_command("docker-compose", &["-f", &self.yaml_path, "up", "-d"])
@@ -278,7 +257,7 @@ impl Drop for DockerCompose {
 ////////////////////////
 
 const SLEEP: u64 = 15;
-const TIMEOUT: u64 = 200;
+const OPERATION_DURATION: u64 = 181;
 const NETWORK_NAME: &str = "compose_net";
 const NEW_PEER_OBSERVED_IP: &str = "172.16.3.6";
 const NEW_PEER_ID: &str = "12D3KooWEU4Vs8N8X8sSJua4crFGvgii4C7Eusi1L5ukxjfzhpmk";

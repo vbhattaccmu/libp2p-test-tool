@@ -214,6 +214,29 @@ impl Controller {
                 }
                 _ = bootstrap_interval.tick() => self.swarm.behaviour_mut().bootstrap(),
             }
+
+            // If time elapsed crosses max allowed operation time, write to CSV and break
+            if current_instant.elapsed() > Duration::from_secs(self.config.operation_duration) {
+                info!("[CSVWriter]: Writing newly connected peers to CSV.");
+                let _ = self
+                    .writer
+                    .append_data_to_csv(
+                        PathBuf::from_str(&self.config.just_connected).unwrap(),
+                        Status::NewlyConnected,
+                    )
+                    .await;
+
+                info!("[CSVWriter]: Writing unreachable peers to CSV");
+                let _ = self
+                    .writer
+                    .append_data_to_csv(
+                        PathBuf::from_str(&self.config.unreachable_csv).unwrap(),
+                        Status::Unreachable,
+                    )
+                    .await;
+
+                break;
+            }
         }
 
         Ok(())
@@ -261,5 +284,18 @@ impl Controller {
         }
 
         Err(CLIError::IPResolutionError)
+    }
+}
+
+impl Drop for Controller {
+    fn drop(&mut self) {
+        let cache = self.writer.newly_connected_peer_cache.read().unwrap();
+
+        info!("Cleaning up network artifacts....");
+        for (peer, _) in cache.iter() {
+            self.swarm
+                .behaviour_mut()
+                .remove_peer(PeerId::from_str(peer).unwrap());
+        }
     }
 }
