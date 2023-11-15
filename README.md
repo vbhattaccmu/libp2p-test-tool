@@ -33,7 +33,7 @@ Once you have Rust installed, the tool can be built with the following steps:-
 - Navigate to `target/release` and execute the binary
 
 ```sh
-./libp2p-test-tool --help
+./libp2p_test_tool --help
 ```
 
 The output will be as follows:-
