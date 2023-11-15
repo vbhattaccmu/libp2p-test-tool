@@ -177,7 +177,7 @@ impl DockerCompose {
         let start_time = Instant::now();
         loop {
             let containers = Self::run_command(
-                "docker-compose",
+                "docker compose",
                 &["-f", &self.yaml_path, "ps", "--status", "running"],
             )
             .unwrap();
@@ -193,7 +193,7 @@ impl DockerCompose {
 
     // Set up compose
     fn up(&self) -> Result<String, String> {
-        Self::run_command("docker-compose", &["-f", &self.yaml_path, "up", "-d"])
+        Self::run_command("docker compose", &["-f", &self.yaml_path, "up", "-d"])
     }
 
     // Add a predefined external peer into the network
@@ -235,7 +235,7 @@ impl DockerCompose {
 
     // Cleanup network artifacts
     fn clean_up(&self) -> Result<String, String> {
-        Self::run_command("docker-compose", &["-f", &self.yaml_path, "down", "-v"])
+        Self::run_command("docker compose", &["-f", &self.yaml_path, "down", "-v"])
     }
 
     // Delete a container
