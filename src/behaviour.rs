@@ -78,23 +78,23 @@ impl From<KademliaEvent> for PeerNetworkEvent {
 }
 
 impl PeerNetworkBehaviour {
-    /// Remove a peer from DHT
+    /// Remove a peer from DHT.
     pub fn remove_peer(&mut self, peer_id: PeerId) {
         self.kad.remove_peer(&peer_id);
     }
 
-    /// Bootstrap DHT
+    /// Bootstrap DHT.
     pub fn bootstrap(&mut self) {
         let _ = self.kad.bootstrap();
     }
 
-    /// Add address to DHT
+    /// Add address to DHT.
     pub fn add_address(&mut self, peer: &PeerId, address: Multiaddr) {
         self.kad.add_address(peer, address);
     }
 
     /// Query the network with a PeerId so as to discover
-    /// other peers in the network
+    /// other peers in the network.
     pub fn get_closest_peers(&mut self, peer_id: PeerId) {
         self.kad.get_closest_peers(peer_id);
     }

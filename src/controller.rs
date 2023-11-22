@@ -9,12 +9,14 @@ use libp2p::{
     kad::{self, Event as KademliaEvent},
     mdns::Event as MdnsEvent,
     multiaddr::Protocol,
+    multihash::Multihash,
     noise, quic,
     swarm::{DialError, SwarmEvent},
     tcp::Config as TcpConfig,
     yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use log::{error, info};
+use rand::Rng;
 use std::{
     net::Ipv4Addr,
     path::PathBuf,
@@ -37,7 +39,7 @@ pub struct Controller {
 }
 
 impl Controller {
-    /// Setup a new Controller object
+    /// Setup a new Controller object.
     pub async fn new(config: Config) -> Result<Self, CLIError> {
         // build transport layer
         let transport = Self::build_transport_layer(&config).map_err(|_| CLIError::ResourceBusy)?;
@@ -62,7 +64,7 @@ impl Controller {
         })
     }
 
-    /// Start the Swarm controller
+    /// Start the Swarm controller.
     pub async fn start(mut self) -> Result<Self, CLIError> {
         // Set a listener for this swarm
         let listening_addr: Multiaddr = format!(
@@ -91,7 +93,7 @@ impl Controller {
         Ok(self)
     }
 
-    /// The main event handler for swarm. Works on Identify, Kad and MDNS
+    /// The main event handler for swarm. Works on Identify, Kad and Mdns.
     /// 1. Identify: In this context, identifies peers with whom connection has been established.
     ///              Also asks the peer node to discover closest peers on DHT.
     /// 2. Kademlia: In this context, the peer discovery protocol where a dialled peer searches
@@ -128,6 +130,14 @@ impl Controller {
                                         self.swarm.behaviour_mut().add_address(&peer_id, multi_addr);
                                         // Ask peer to discover more peers
                                         self.swarm.behaviour_mut().get_closest_peers(peer_id);
+
+                                        for i in 1..=MAX_RECONSTRUCTED_PEERS {
+                                            if let Ok(reconstructed_peer_id) = Self::generate_random_peer(peer_id, i) {
+                                                self.swarm.behaviour_mut().get_closest_peers(reconstructed_peer_id);
+                                            } else {
+                                                error!("[Swarm]: Failed to reconstruct peer.")
+                                            }
+                                        }
                                     });
                             }
                             IdentifyEvent::Sent { peer_id } => {
@@ -270,7 +280,7 @@ impl Controller {
         Ok(transport)
     }
 
-    /// A utility helper to resolve Peer IP address via `multiaddr::Protocol`
+    /// A utility helper to resolve Peer IP address via `multiaddr::Protocol`.
     fn get_peer_ip(multi_addr: &Multiaddr) -> Result<String, CLIError> {
         if let Some(protocol) = multi_addr.into_iter().next() {
             match protocol {
@@ -284,6 +294,22 @@ impl Controller {
         }
 
         Err(CLIError::IPResolutionError)
+    }
+
+    /// A utility helper to generate a peer ID close to an existing with
+    /// target least common prefix length.
+    fn generate_random_peer(peer: PeerId, target_cpl: u32) -> Result<PeerId, CLIError> {
+        let origin_peer_id = peer.to_bytes();
+        let mut peer_id = rand::thread_rng().gen::<[u8; 32]>();
+
+        let mask = (1 << target_cpl) - 1;
+        for i in 0..4 {
+            peer_id[i] = (peer_id[i] & !mask) | (origin_peer_id[i] & mask);
+        }
+
+        let multihash = Multihash::wrap(0x0, &peer_id).map_err(|_| CLIError::IdentityError)?;
+
+        PeerId::from_multihash(multihash).map_err(|_| CLIError::IdentityError)
     }
 }
 
@@ -299,3 +325,5 @@ impl Drop for Controller {
         }
     }
 }
+
+const MAX_RECONSTRUCTED_PEERS: u32 = 15;
